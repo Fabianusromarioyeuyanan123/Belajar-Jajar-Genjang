@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jajar Genjang Geometri Interaktif</title>
+    <style>
+        :root {
+            --bg: #020617;
+            --card: #0f172a;
+            --primary: #38bdf8;
+            --secondary: #fb7185;
+            --accent: #a855f7;
+            --text: #f8fafc;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: var(--card);
+            padding: 2.5rem;
+            border-radius: 32px;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7);
+            border: 1px solid rgba(255,255,255,0.1);
+            text-align: center;
+        }
+
+        canvas {
+            background: #000000;
+            border-radius: 20px;
+            cursor: pointer;
+            box-shadow: inset 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        .info-panel {
+            margin-top: 1.5rem;
+            padding: 1.2rem;
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 16px;
+            min-height: 60px;
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #status { font-size: 1.1rem; color: #94a3b8; margin: 0; }
+        .highlight { font-weight: bold; color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1 style="margin-bottom: 20px;">Geometri Interaktif Jajar Genjang</h1>
+        <canvas id="masterCanvas" width="600" height="400"></canvas>
+        <div class="info-panel">
+            <p id="status">Klik pada Sisi, Diagonal, atau Busur Sudut.</p>
+        </div>
+    </div>
+
+<script>
+    const canvas = document.getElementById('masterCanvas');
+    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+
+    // Titik sudut Jajar Genjang
+    const P = {
+        A: { x: 200, y: 100 },
+        B: { x: 500, y: 100 },
+        C: { x: 400, y: 300 },
+        D: { x: 100, y: 300 }
+    };
+
+    let sides = [
+        { id: 'Sisi AB', p1: P.A, p2: P.B, active: false },
+        { id: 'Sisi BC', p1: P.B, p2: P.C, active: false },
+        { id: 'Sisi CD', p1: P.C, p2: P.D, active: false },
+        { id: 'Sisi DA', p1: P.D, p2: P.A, active: false }
+    ];
+
+    let diagonals = [
+        { id: 'Diagonal AC', p1: P.A, p2: P.C, active: false },
+        { id: 'Diagonal BD', p1: P.B, p2: P.D, active: false }
+    ];
+
+    let angles = [
+        { id: 'A', center: P.A, p1: P.B, p2: P.D, deg: 117, color: '#4ade80', active: false },
+        { id: 'B', center: P.B, p1: P.C, p2: P.A, deg: 63,  color: '#fb923c', active: false },
+        { id: 'C', center: P.C, p1: P.D, p2: P.B, deg: 117, color: '#4ade80', active: false },
+        { id: 'D', center: P.D, p1: P.A, p2: P.C, deg: 63,  color: '#fb923c', active: false }
+    ];
+
+    function getDistToLine(pt, v, w) {
+        const l2 = Math.pow(v.x - w.x, 2) + Math.pow(v.y - w.y, 2);
+        let t = ((pt.x - v.x) * (w.x - v.x) + (pt.y - v.y) * (w.y - v.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return Math.sqrt(Math.pow(pt.x - (v.x + t * (w.x - v.x)), 2) + Math.pow(pt.y - (v.y + t * (w.y - v.y)), 2));
+    }
+
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Gambar Busur Sudut
+        angles.forEach(ang => {
+            let start = Math.atan2(ang.p1.y - ang.center.y, ang.p1.x - ang.center.x);
+            let end = Math.atan2(ang.p2.y - ang.center.y, ang.p2.x - ang.center.x);
+            
+            // Logika Normalisasi Sudut agar busur selalu digambar ke arah dalam
+            let diff = end - start;
+            while (diff < 0) diff += Math.PI * 2;
+            while (diff > Math.PI * 2) diff -= Math.PI * 2;
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(ang.center.x, ang.center.y);
+            ctx.arc(ang.center.x, ang.center.y, 50, start, start + diff, false);
+            ctx.closePath();
+            
+            ctx.fillStyle = ang.color;
+            ctx.globalAlpha = ang.active ? 0.6 : 0.15;
+            ctx.fill();
+            
+            ctx.strokeStyle = ang.color;
+            ctx.lineWidth = ang.active ? 4 : 2;
+            if(ang.active) { ctx.shadowBlur = 15; ctx.shadowColor = ang.color; }
+            ctx.stroke();
+            
+            // Render Teks Nilai Sudut
+            if(ang.active) {
+                const mid = start + diff / 2;
+                ctx.globalAlpha = 1; 
+                ctx.fillStyle = "#fff"; 
+                ctx.font = "bold 14px Inter"; 
+                ctx.textAlign = "center";
+                // Angka 40 adalah jarak teks dari titik pusat sudut
+                ctx.fillText(ang.deg + "°", ang.center.x + Math.cos(mid) * 40, ang.center.y + Math.sin(mid) * 40 + 5);
+            }
+            ctx.restore();
+        });
+
+        // 2. Gambar Diagonal
+        diagonals.forEach(d => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash([8, 6]);
+            ctx.moveTo(d.p1.x, d.p1.y);
+            ctx.lineTo(d.p2.x, d.p2.y);
+            ctx.strokeStyle = d.active ? "#38bdf8" : "rgba(56, 189, 248, 0.3)";
+            ctx.lineWidth = d.active ? 4 : 2;
+            if(d.active) { ctx.shadowBlur = 10; ctx.shadowColor = "#38bdf8"; ctx.setLineDash([]); }
+            ctx.stroke();
+            ctx.restore();
+        });
+
+        // 3. Gambar Sisi
+        sides.forEach(s => {
+            ctx.save();
+            ctx.beginPath();
+            ctx.moveTo(s.p1.x, s.p1.y);
+            ctx.lineTo(s.p2.x, s.p2.y);
+            ctx.strokeStyle = s.active ? "#fb7185" : "#94a3b8";
+            ctx.lineWidth = s.active ? 6 : 3;
+            ctx.lineCap = "round";
+            if(s.active) { ctx.shadowBlur = 15; ctx.shadowColor = "#fb7185"; }
+            ctx.stroke();
+            ctx.restore();
+        });
+
+        // 4. Label Titik (A, B, C, D)
+        ctx.fillStyle = "#fff"; ctx.font = "bold 16px Inter";
+        ctx.fillText("A", P.A.x-25, P.A.y-10); 
+        ctx.fillText("B", P.B.x+15, P.B.y-10);
+        ctx.fillText("C", P.C.x+15, P.C.y+25); 
+        ctx.fillText("D", P.D.x-25, P.D.y+25);
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const m = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        
+        // Reset state semua elemen
+        let selection = "";
+        angles.forEach(a => a.active = false);
+        sides.forEach(s => s.active = false);
+        diagonals.forEach(d => d.active = false);
+
+        // Deteksi klik pada Sudut (Radius toleransi 55px)
+        let hitA = angles.find(a => Math.sqrt(Math.pow(m.x - a.center.x, 2) + Math.pow(m.y - a.center.y, 2)) < 55);
+        if(hitA) { 
+            hitA.active = true; 
+            selection = `Sudut <span class="highlight">${hitA.id}</span> terpilih: ${hitA.deg}°`; 
+        }
+
+        // Deteksi klik pada Diagonal
+        if(!selection) {
+            let hitD = diagonals.find(d => getDistToLine(m, d.p1, d.p2) < 10);
+            if(hitD) { hitD.active = true; selection = `<span class="highlight">${hitD.id}</span> terpilih.`; }
+        }
+
+        // Deteksi klik pada Sisi
+        if(!selection) {
+            let hitS = sides.find(s => getDistToLine(m, s.p1, s.p2) < 10);
+            if(hitS) { hitS.active = true; selection = `<span class="highlight">${hitS.id}</span> terpilih.`; }
+        }
+
+        statusEl.innerHTML = selection || "Klik pada Sisi, Diagonal, atau Busur Sudut.";
+        render();
+    });
+
+    // Inisialisasi gambar pertama kali
+    render();
+</script>
+</body>
+</html>
